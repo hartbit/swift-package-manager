@@ -4132,6 +4132,7 @@ final class WorkspaceTests: XCTestCase {
             ]
         )
 
+      #if os(macOS)
         workspace.checkPackageGraph(roots: ["Foo"]) { graph, diagnostics in
             XCTAssert(!diagnostics.hasErrors, "\(diagnostics.diagnostics)")
             XCTAssert(fs.isDirectory(AbsolutePath("/tmp/ws/.build/artifacts/B")))
@@ -4216,6 +4217,60 @@ final class WorkspaceTests: XCTestCase {
                 checksum: "b0",
                 subpath: RelativePath("B/B.xcframework")))
         }
+      #else
+        workspace.checkPackageGraph(roots: ["Foo"]) { graph, diagnostics in
+            XCTAssert(!diagnostics.hasErrors, "\(diagnostics.diagnostics)")
+            XCTAssert(fs.getDirectoryContents(AbsolutePath("/tmp/ws/.build/artifacts")).isEmpty)
+            XCTAssertEqual(downloads, [])
+            XCTAssertEqual(workspace.checksumAlgorithm.hashes, [])
+            XCTAssertEqual(workspace.archiver.extractions, [])
+            PackageGraphTester(graph) { graph in
+                if let a1 = graph.find(target: "A1")?.underlyingTarget as? BinaryTarget {
+                    XCTAssertEqual(a1.artifactPath, AbsolutePath("/"))
+                    XCTAssertEqual(a1.artifactSource, .remote(url: "https://a.com/a1.zip"))
+                } else {
+                    XCTFail("expected binary target")
+                }
+
+                if let a2 = graph.find(target: "A2")?.underlyingTarget as? BinaryTarget {
+                    XCTAssertEqual(a2.artifactPath, AbsolutePath("/"))
+                    XCTAssertEqual(a2.artifactSource, .remote(url: "https://a.com/a2.zip"))
+                } else {
+                    XCTFail("expected binary target")
+                }
+
+                if let a3 = graph.find(target: "A3")?.underlyingTarget as? BinaryTarget {
+                    XCTAssertEqual(a3.artifactPath, AbsolutePath("/"))
+                    XCTAssertEqual(a3.artifactSource, .remote(url: "https://a.com/a3.zip"))
+                } else {
+                    XCTFail("expected binary target")
+                }
+
+                if let a4 = graph.find(target: "A4")?.underlyingTarget as? BinaryTarget {
+                    XCTAssertEqual(a4.artifactPath, a4FrameworkPath)
+                    XCTAssertEqual(a4.artifactSource, .local)
+                } else {
+                    XCTFail("expected binary target")
+                }
+
+                if let b = graph.find(target: "B")?.underlyingTarget as? BinaryTarget {
+                    XCTAssertEqual(b.artifactPath, AbsolutePath("/"))
+                    XCTAssertEqual(b.artifactSource, .remote(url: "https://b.com/b.zip"))
+                } else {
+                    XCTFail("expected binary target")
+                }
+            }
+        }
+
+        workspace.checkManagedArtifacts { result in
+            result.checkNotPresent(packageName: "A", targetName: "A1")
+            result.checkNotPresent(packageName: "A", targetName: "A2")
+            result.checkNotPresent(packageName: "A", targetName: "A3")
+            result.checkNotPresent(packageName: "A", targetName: "A4")
+            result.checkNotPresent(packageName: "A", targetName: "A5")
+            result.checkNotPresent(packageName: "B", targetName: "B")
+        }
+      #endif
     }
 
     func testArtifactDownloaderOrArchiverError() throws {

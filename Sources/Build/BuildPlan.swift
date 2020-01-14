@@ -1318,9 +1318,13 @@ public class BuildPlan {
         for buildTarget in targets {
             switch buildTarget {
             case .swift(let target):
-                try plan(swiftTarget: target)
+                plan(swiftTarget: target)
             case .clang(let target):
                 plan(clangTarget: target)
+            }
+
+            guard !diagnostics.hasErrors else {
+                return
             }
         }
 
@@ -1504,19 +1508,27 @@ public class BuildPlan {
                 clangTarget.additionalFlags += ["-fmodule-map-file=\(target.moduleMapPath.pathString)"]
                 clangTarget.additionalFlags += pkgConfig(for: target).cFlags
             case let target as BinaryTarget:
+              #if os(macOS)
                 if let library = xcFrameworkLibrary(for: target) {
                     if let headersPath = library.headersPath {
                         clangTarget.additionalFlags += ["-I", headersPath.pathString]
                     }
                     clangTarget.libraryBinaryPaths.insert(library.binaryPath)
                 }
+              #else
+                diagnostics.emit(.binaryTargetsNotSupported(
+                    targetName: clangTarget.target.name,
+                    binaryTargetName: target.name
+                ))
+                return
+              #endif
             default: continue
             }
         }
     }
 
     /// Plan a Swift target.
-    private func plan(swiftTarget: SwiftTargetBuildDescription) throws {
+    private func plan(swiftTarget: SwiftTargetBuildDescription) {
         // We need to iterate recursive dependencies because Swift compiler needs to see all the targets a target
         // depends on.
         for dependency in swiftTarget.target.recursiveDependencies() {
@@ -1538,12 +1550,20 @@ public class BuildPlan {
                 swiftTarget.additionalFlags += ["-Xcc", "-fmodule-map-file=\(target.moduleMapPath.pathString)"]
                 swiftTarget.additionalFlags += pkgConfig(for: target).cFlags
             case let target as BinaryTarget:
+              #if os(macOS)
                 if let library = xcFrameworkLibrary(for: target) {
                     if let headersPath = library.headersPath {
                         swiftTarget.additionalFlags += ["-I", headersPath.pathString]
                     }
                     swiftTarget.libraryBinaryPaths.insert(library.binaryPath)
                 }
+              #else
+                diagnostics.emit(.binaryTargetsNotSupported(
+                    targetName: clangTarget.target.name,
+                    binaryTargetName: target.name
+                ))
+                return
+              #endif
             default:
                 break
             }
@@ -1722,8 +1742,11 @@ private extension Diagnostic.Message {
         .warning(PkgConfigHintDiagnostic(pkgConfigName: pkgConfigName, installText: installText))
     }
 
-    static func binaryTargetsNotSupported() -> Diagnostic.Message {
-        .error("binary targets are not supported on this platform")
+    static func binaryTargetsNotSupported(targetName: String, binaryTargetName: String) -> Diagnostic.Message {
+        .error(""""
+            target '\(targetName)' depends on a binary target '\(binaryTargetName)' is a binary target, which is not \
+            supported on this platform; to resolve this issue, conditionalize the binary target dependency to macOS
+            """)
     }
 }
 

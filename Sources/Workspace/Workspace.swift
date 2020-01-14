@@ -1354,6 +1354,7 @@ extension Workspace {
     }
 
     private func artifacts(from manifests: DependencyManifests) -> [ManagedArtifact] {
+      #if os(macOS)
         let packageAndManifests: [(PackageReference, Manifest)] =
             zip(manifests.root.packageRefs, manifests.root.manifests) + // Root package and manifests.
             manifests.dependencies.map({ ($1.packageRef, $0) }) // Dependency package and manifests.
@@ -1381,6 +1382,9 @@ extension Workspace {
         }
 
         return artifacts
+      #else
+        return []
+      #endif
     }
 
     private func artifactSubpath(packageRef: PackageReference, targetName: String) -> RelativePath {

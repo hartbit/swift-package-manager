@@ -489,7 +489,7 @@ public final class PackageBuilder {
                 if let artifact = remoteArtifacts.first(where: { $0.path.basenameWithoutExt == target.name }) {
                     return artifact.path
                 } else {
-                    throw ModuleError.artifactNotFound(target.name)
+                    return AbsolutePath("/")
                 }
             }
 
